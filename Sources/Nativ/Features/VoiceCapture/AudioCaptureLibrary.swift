@@ -429,7 +429,8 @@ final class AudioCaptureLibrary: ObservableObject {
         let asset = AVURLAsset(url: url)
         let durationSeconds: TimeInterval
         do {
-            durationSeconds = try await CMTimeGetSeconds(asset.load(.duration))
+            let loadedDuration = try await asset.load(.duration)
+            durationSeconds = CMTimeGetSeconds(loadedDuration)
         } catch {
             lastErrorMessage = AudioCaptureLibraryError.recordingUnavailable.localizedDescription
             return
