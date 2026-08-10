@@ -1922,7 +1922,11 @@ struct AudioView: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.audio]
+        var allowedTypes: [UTType] = [.mpeg4Audio, .mp3, .wav]
+        if let flac = UTType(filenameExtension: "flac") {
+            allowedTypes.append(flac)
+        }
+        panel.allowedContentTypes = allowedTypes
         panel.prompt = "Import"
         guard panel.runModal() == .OK, let url = panel.url else {
             return
