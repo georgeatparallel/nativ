@@ -257,7 +257,7 @@ final class AudioCaptureLibrary: ObservableObject {
                     )
                     activeBackend = .microphone
                 }
-            case .dictation:
+            case .dictation, .upload:
                 return
             }
             captureStartedAt = Date()
