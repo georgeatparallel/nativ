@@ -52,6 +52,8 @@ enum AudioCaptureLibraryError: LocalizedError {
     case missingLanguageModel
     case recordingUnavailable
     case emptyTranscript
+    case unsupportedFormat
+    case fileTooLong(maxMinutes: Int)
 
     var errorDescription: String? {
         switch self {
@@ -69,6 +71,10 @@ enum AudioCaptureLibraryError: LocalizedError {
             "The saved audio file is no longer available."
         case .emptyTranscript:
             "The recording was saved, but the speech model did not produce a transcript."
+        case .unsupportedFormat:
+            "This audio format isn't supported. Import a .m4a, .mp3, .wav, or .flac file."
+        case .fileTooLong(let maxMinutes):
+            "This audio is longer than \(maxMinutes) minutes. Import a shorter file."
         }
     }
 }
@@ -412,6 +418,62 @@ final class AudioCaptureLibrary: ObservableObject {
         }
     }
 
+    func importFile(url: URL) async {
+        let fileExtension = url.pathExtension.lowercased()
+        let supportedExtensions = ["wav", "wave", "m4a", "mp4", "mp3", "flac"]
+        guard supportedExtensions.contains(fileExtension) else {
+            lastErrorMessage = AudioCaptureLibraryError.unsupportedFormat.localizedDescription
+            return
+        }
+
+        let asset = AVURLAsset(url: url)
+        let durationSeconds: TimeInterval
+        do {
+            durationSeconds = try await CMTimeGetSeconds(asset.load(.duration))
+        } catch {
+            lastErrorMessage = AudioCaptureLibraryError.recordingUnavailable.localizedDescription
+            return
+        }
+        guard durationSeconds.isFinite, durationSeconds > 0 else {
+            lastErrorMessage = AudioCaptureLibraryError.recordingUnavailable.localizedDescription
+            return
+        }
+        guard durationSeconds <= 50 * 60 else {
+            lastErrorMessage = AudioCaptureLibraryError.fileTooLong(maxMinutes: 50).localizedDescription
+            return
+        }
+
+        let destination: URL
+        do {
+            destination = try Self.importedOutputURL(fileExtension: fileExtension)
+            try FileManager.default.copyItem(at: url, to: destination)
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            return
+        }
+
+        let title = url.deletingPathExtension().lastPathComponent
+        analytics.addCapture(
+            recordingURL: destination,
+            kind: .upload,
+            title: title,
+            durationSeconds: durationSeconds
+        )
+
+        let recordID = destination.deletingPathExtension().lastPathComponent
+        guard !processingRecordIDs.contains(recordID) else {
+            return
+        }
+        processingRecordIDs.insert(recordID)
+        await processRecording(
+            destination,
+            kind: .upload,
+            title: title,
+            duration: durationSeconds,
+            automaticallySummarize: true
+        )
+    }
+
     func audioURL(for record: AudioTranscriptionRecord) -> URL? {
         guard let audioFileName = record.audioFileName,
               let directory = try? Self.recordingsDirectory
@@ -575,6 +637,7 @@ final class AudioCaptureLibrary: ObservableObject {
                     let summary = try await generateSummary(for: transcript)
                     analytics.updateSummary(summary, for: recordID)
                     try writeSummary(summary, recordID: recordID)
+                } catch AudioCaptureLibraryError.missingLanguageModel {
                 } catch {
                     lastErrorMessage = "The transcript was saved, but the summary failed: \(error.localizedDescription)"
                 }
@@ -824,6 +887,15 @@ final class AudioCaptureLibrary: ObservableObject {
         return try recordingsDirectory
             .appendingPathComponent("\(prefix) \(formatter.string(from: Date()))")
             .appendingPathExtension("wav")
+    }
+
+    private static func importedOutputURL(fileExtension: String) throws -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss.SSS"
+        return try recordingsDirectory
+            .appendingPathComponent("Imported \(formatter.string(from: Date()))")
+            .appendingPathExtension(fileExtension)
     }
 
     private static func defaultTitle(for kind: AudioRecordKind, date: Date) -> String {
