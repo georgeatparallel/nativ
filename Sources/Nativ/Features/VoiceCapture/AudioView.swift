@@ -205,14 +205,14 @@ struct AudioView: View {
             Text("All locally stored dictation transcripts and retained dictation audio will be permanently deleted.")
         }
         .alert(
-            "Delete recording?",
+            "Remove recording?",
             isPresented: Binding(
                 get: { pendingDeleteRecording != nil },
                 set: { if !$0 { pendingDeleteRecording = nil } }
             ),
             presenting: pendingDeleteRecording
         ) { record in
-            Button("Delete", role: .destructive) {
+            Button("Remove", role: .destructive) {
                 captureLibrary.delete(record)
                 pendingDeleteRecording = nil
             }
@@ -221,7 +221,7 @@ struct AudioView: View {
                 pendingDeleteRecording = nil
             }
         } message: { record in
-            Text("“\(record.displayTitle)” and its saved audio, transcript, and summary will be permanently deleted.")
+            Text("“\(record.displayTitle)” will be removed from your Nativ audio library.")
         }
     }
 
@@ -2766,25 +2766,9 @@ private struct AudioCaptureRecordRow: View {
                 }
 
                 Menu {
-                    if !record.transcript.isEmpty {
-                        Button("Copy transcript", action: copyTranscript)
-                        if let summary = record.summary, !summary.isEmpty {
-                            Button("Copy summary") {
-                                copy(summary, detail: .summary)
-                            }
-                        }
-                        Button(
-                            record.summary?.isEmpty == false
-                                ? "Regenerate summary"
-                                : "Generate summary",
-                            action: onSummarize
-                        )
-                        .disabled(isProcessing)
-                    }
-                    Divider()
-                    Button("Reveal in Finder", action: onReveal)
+                    Button("Open in Finder", action: onReveal)
                         .disabled(!audioIsAvailable)
-                    Button("Delete recording", role: .destructive, action: onDelete)
+                    Button("Remove", role: .destructive, action: onDelete)
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: 18)
