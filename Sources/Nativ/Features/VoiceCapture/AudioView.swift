@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import Charts
 import SwiftUI
 import Textual
+import UniformTypeIdentifiers
 
 private enum AudioDestination: String, CaseIterable, Identifiable {
     case overview
@@ -1916,6 +1917,21 @@ struct AudioView: View {
         .audioPanelStyle()
     }
 
+    private func importAudioFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.audio]
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+        Task {
+            await captureLibrary.importFile(url: url)
+        }
+    }
+
     private var savedCapturesPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -1927,6 +1943,13 @@ struct AudioView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button {
+                    importAudioFile()
+                } label: {
+                    Label("Import file", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
                 Button {
                     destination = .record
                 } label: {
@@ -1940,12 +1963,15 @@ struct AudioView: View {
                 ContentUnavailableView {
                     Label("No saved recordings", systemImage: "waveform.badge.plus")
                 } description: {
-                    Text("Start a recording to create your local audio library.")
+                    Text("Record audio or import a file to create your local audio library.")
                 } actions: {
                     Button("Record audio") {
                         destination = .record
                     }
                     .buttonStyle(.borderedProminent)
+                    Button("Import a file") {
+                        importAudioFile()
+                    }
                 }
                 .frame(maxWidth: .infinity, minHeight: 170)
             } else {
