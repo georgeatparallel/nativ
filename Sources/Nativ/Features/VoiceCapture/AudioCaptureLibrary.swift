@@ -446,10 +446,18 @@ final class AudioCaptureLibrary: ObservableObject {
 
         let destination: URL
         do {
-            destination = try Self.importedOutputURL(fileExtension: fileExtension)
-            try FileManager.default.copyItem(at: url, to: destination)
+            destination = try Self.importedOutputURL()
         } catch {
             lastErrorMessage = error.localizedDescription
+            return
+        }
+        do {
+            try await Task.detached {
+                try Self.transcodeToWAV(source: url, destination: destination)
+            }.value
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            lastErrorMessage = AudioCaptureLibraryError.recordingUnavailable.localizedDescription
             return
         }
 
@@ -890,13 +898,90 @@ final class AudioCaptureLibrary: ObservableObject {
             .appendingPathExtension("wav")
     }
 
-    private static func importedOutputURL(fileExtension: String) throws -> URL {
+    private static func importedOutputURL() throws -> URL {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss.SSS"
         return try recordingsDirectory
             .appendingPathComponent("Imported \(formatter.string(from: Date()))")
-            .appendingPathExtension(fileExtension)
+            .appendingPathExtension("wav")
+    }
+
+    private nonisolated static func transcodeToWAV(source: URL, destination: URL) throws {
+        let input = try AVAudioFile(forReading: source)
+        let inputFormat = input.processingFormat
+        guard let outputFormat = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: true
+        ) else {
+            throw AudioCaptureLibraryError.unsupportedFormat
+        }
+        let output = try AVAudioFile(
+            forWriting: destination,
+            settings: outputFormat.settings,
+            commonFormat: .pcmFormatInt16,
+            interleaved: true
+        )
+        guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
+            throw AudioCaptureLibraryError.unsupportedFormat
+        }
+        let inputChunkFrames: AVAudioFrameCount = 16_384
+        var reachedEnd = false
+        let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
+            if reachedEnd {
+                outStatus.pointee = .endOfStream
+                return nil
+            }
+            guard let buffer = AVAudioPCMBuffer(
+                pcmFormat: inputFormat,
+                frameCapacity: inputChunkFrames
+            ) else {
+                outStatus.pointee = .endOfStream
+                return nil
+            }
+            do {
+                try input.read(into: buffer, frameCount: inputChunkFrames)
+            } catch {
+                reachedEnd = true
+                outStatus.pointee = .endOfStream
+                return nil
+            }
+            if buffer.frameLength == 0 {
+                reachedEnd = true
+                outStatus.pointee = .endOfStream
+                return nil
+            }
+            outStatus.pointee = .haveData
+            return buffer
+        }
+        while true {
+            guard let outputBuffer = AVAudioPCMBuffer(
+                pcmFormat: outputFormat,
+                frameCapacity: inputChunkFrames
+            ) else {
+                throw AudioCaptureLibraryError.unsupportedFormat
+            }
+            var conversionError: NSError?
+            let status = converter.convert(
+                to: outputBuffer,
+                error: &conversionError,
+                withInputFrom: inputBlock
+            )
+            if let conversionError {
+                throw conversionError
+            }
+            if outputBuffer.frameLength > 0 {
+                try output.write(from: outputBuffer)
+            }
+            if status == .endOfStream || status == .error {
+                break
+            }
+            if status == .inputRanDry {
+                break
+            }
+        }
     }
 
     private static func defaultTitle(for kind: AudioRecordKind, date: Date) -> String {
