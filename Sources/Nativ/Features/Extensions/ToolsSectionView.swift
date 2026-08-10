@@ -158,7 +158,7 @@ struct ToolsSectionView: View {
     }
 
     private var nativeTools: [ToolItem] {
-        ChatToolRegistry.descriptors(canEditImage: false).map {
+        var tools = ChatToolRegistry.descriptors(canEditImage: false).map {
             ToolItem(
                 name: $0.definition.function.name,
                 title: $0.configuration?.displayName ?? humanized($0.definition.function.name),
@@ -169,6 +169,14 @@ struct ToolsSectionView: View {
                 configuration: $0.configuration
             )
         }
+        tools.append(ToolItem(
+            name: ChatUseKitToolRegistry.toolName,
+            title: humanized(ChatUseKitToolRegistry.toolName),
+            detail: "Makes a Kit's capabilities available after user confirmation.",
+            isRunnable: false,
+            isBuiltIn: true
+        ))
+        return tools
     }
 
     private func humanized(_ name: String) -> String {

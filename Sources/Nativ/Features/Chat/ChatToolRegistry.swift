@@ -41,6 +41,13 @@ enum ChatNativeToolConfiguration: Equatable {
             "Web Search"
         }
     }
+
+    var isReady: Bool {
+        switch self {
+        case .webSearch:
+            ChatWebSearchToolRegistry.isConfigured()
+        }
+    }
 }
 
 struct ChatNativeToolDescriptor {
@@ -49,8 +56,12 @@ struct ChatNativeToolDescriptor {
 }
 
 enum ChatToolRegistry {
-    static func definitions(canEditImage: Bool) -> [MLXChatToolDefinition] {
+    static func definitions(
+        canEditImage: Bool,
+        kits: [ChatKitDescriptor] = []
+    ) -> [MLXChatToolDefinition] {
         descriptors(canEditImage: canEditImage).map(\.definition)
+            + ChatUseKitToolRegistry.definitions(kits: kits)
     }
 
     static func descriptors(canEditImage: Bool) -> [ChatNativeToolDescriptor] {
@@ -100,6 +111,9 @@ enum ChatToolDispatcher {
         },
         ChatWebSearchToolRegistry.toolName: { _, error in
             ChatWebSearchToolExecutor().failurePayload(error: error)
+        },
+        ChatUseKitToolRegistry.toolName: { name, error in
+            ChatUseKitToolExecutor().failurePayload(operation: name, error: error)
         },
     ]
 
@@ -273,6 +287,8 @@ enum ChatToolPresentation {
             return switchModelTitle(status: status)
         case ChatWebSearchToolRegistry.toolName:
             return webSearchTitle(status: status)
+        case ChatUseKitToolRegistry.toolName:
+            return useKitTitle(status: status)
         default:
             return genericTitle(toolName: toolName, status: status)
         }
@@ -305,6 +321,8 @@ enum ChatToolPresentation {
                 return "arrow.triangle.2.circlepath"
             case ChatWebSearchToolRegistry.toolName:
                 return "globe"
+            case ChatUseKitToolRegistry.toolName:
+                return "shippingbox"
             default:
                 return "wrench.and.screwdriver"
             }
@@ -396,6 +414,23 @@ enum ChatToolPresentation {
             return "Web search"
         case nil:
             return "Web search"
+        }
+    }
+
+    private static func useKitTitle(status: ChatTranscriptMessage.ToolStatus?) -> String {
+        switch status {
+        case .awaitingConsent:
+            return "Use Kit?"
+        case .preparing, .running:
+            return "Making Kit available…"
+        case .succeeded:
+            return "Kit available"
+        case .declined:
+            return "Kit activation declined"
+        case .failed, .cancelled, .awaitingImageModelSelection:
+            return "Use Kit"
+        case nil:
+            return "Kit tool"
         }
     }
 
