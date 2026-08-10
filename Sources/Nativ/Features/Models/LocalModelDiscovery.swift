@@ -1247,8 +1247,13 @@ enum LocalModelDiscovery {
             capabilities.insert(.audio)
         }
 
-        let speechToTextDescriptors = ["whisper", "asr", "transcribe", "speechrecognition"]
-        if speechToTextDescriptors.contains(where: descriptors.contains) {
+        let speechToTextKeys: Set<String> = ["rnnt_reduction", "aux_ctc", "interctc"]
+        let speechToTextDescriptors = [
+            "whisper", "asr", "transcribe", "speechrecognition",
+            "parakeet", "canary", "conformer"
+        ]
+        if !keys.isDisjoint(with: speechToTextKeys)
+            || speechToTextDescriptors.contains(where: descriptors.contains) {
             capabilities.insert(.speechToText)
         }
 
