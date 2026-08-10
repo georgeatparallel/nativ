@@ -603,7 +603,8 @@ final class AudioCaptureLibrary: ObservableObject {
         }
         let client = NativAudioClient(
             baseURL: configuration.serverBaseURL,
-            apiKey: configuration.serverAPIKey
+            apiKey: configuration.serverAPIKey,
+            timeout: 3_600
         )
         let result = try await client.transcribe(fileURL: recordingURL, model: modelID)
         let transcript = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
