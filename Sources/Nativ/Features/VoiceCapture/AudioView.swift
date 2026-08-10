@@ -1947,20 +1947,22 @@ struct AudioView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button {
-                    importAudioFile()
-                } label: {
-                    Label("Import file", systemImage: "square.and.arrow.down")
+                if !captureRecords.isEmpty {
+                    Button {
+                        importAudioFile()
+                    } label: {
+                        Label("Import file", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    Button {
+                        destination = .record
+                    } label: {
+                        Label("New recording", systemImage: "plus")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                Button {
-                    destination = .record
-                } label: {
-                    Label("New recording", systemImage: "plus")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
 
             if captureRecords.isEmpty {
